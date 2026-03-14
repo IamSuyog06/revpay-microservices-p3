@@ -1,5 +1,7 @@
 package com.revpay.user_service.service;
 
+import com.revpay.user_service.client.CreateWalletRequest;
+import com.revpay.user_service.client.WalletServiceClient;
 import com.revpay.user_service.dto.*;
 import com.revpay.user_service.entity.User;
 import com.revpay.user_service.enums.BusinessVerificationStatus;
@@ -21,13 +23,16 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final WalletServiceClient walletServiceClient;
+
 
     public UserService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtUtil jwtUtil) {
+                       JwtUtil jwtUtil, WalletServiceClient walletServiceClient) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.walletServiceClient = walletServiceClient;
     }
 
     public UserResponse register(RegisterRequest request) {
@@ -104,6 +109,18 @@ public class UserService {
         User savedUser = userRepository.save(user);
         logger.info("User registered successfully with id: {}",
                 savedUser.getId());
+
+        // Create wallet for new user via Feign
+        try {
+            walletServiceClient.createWallet(
+                    new CreateWalletRequest(savedUser.getId()));
+            logger.info("Wallet created for userId: {}",
+                    savedUser.getId());
+        } catch (Exception e) {
+            logger.error("Could not create wallet for userId: {}."
+                    + " Error: {}", savedUser.getId(), e.getMessage());
+            // We don't fail registration if wallet creation fails
+        }
 
         return mapToUserResponse(savedUser);
     }
